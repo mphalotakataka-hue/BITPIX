@@ -1,0 +1,235 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111111">
+<title>BITPIX - Photo to Bitcoin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101010;color:#fff;font-family:Arial,sans-serif}
+header{padding:22px;background:#181818;border-bottom:1px solid #333}
+.logo{font-size:29px;font-weight:900;color:#f7931a}
+.tag{color:#aaa;font-size:12px;margin-top:5px}
+main{max-width:650px;margin:auto;padding:18px}
+.card{background:#1c1c1c;border:1px solid #333;border-radius:15px;padding:18px;margin-bottom:16px}
+h2{font-size:19px;margin-top:0}
+input,button{width:100%;padding:14px;border-radius:9px;margin:7px 0;font-size:15px}
+input{background:#292929;color:white;border:1px solid #555}
+button{background:#f7931a;color:#111;font-weight:bold;border:0;cursor:pointer}
+button.secondary{background:#333;color:white}
+button:disabled{opacity:.5}
+.small{font-size:12px;color:#aaa}
+.stat{font-size:27px;color:#f7931a;font-weight:bold}
+.photo{width:100%;border-radius:10px;margin-top:10px}
+#app{display:none}
+#message{padding:10px;color:#f7931a}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">₿ BITPIX</div>
+ <div class="tag">UPLOAD PHOTOS • EARN BITCOIN • BUILD COMMUNITY</div>
+</header>
+<main>
+<div id="message">Welcome to BITPIX. Connect your account to begin.</div>
+
+<section id="auth" class="card">
+ <h2>Join BITPIX</h2>
+ <input id="email" type="email" placeholder="Your email address">
+ <input id="password" type="password" placeholder="Password (minimum 6 characters)">
+ <button onclick="signUp()">Create account</button>
+ <button class="secondary" onclick="signIn()">Log in</button>
+</section>
+
+<section id="app">
+ <div class="card">
+  <h2>My Bitcoin rewards</h2>
+  <div class="stat" id="balance">0.000000000000 BTC</div>
+  <p class="small">Approved rewards only. Pending photos do not earn Bitcoin.</p>
+  <button class="secondary" onclick="loadData()">Refresh balance</button>
+ </div>
+
+ <div class="card">
+  <h2>Upload a photo</h2>
+  <input id="photoFile" type="file" accept="image/*">
+  <button onclick="uploadPhoto()">Upload photo</button>
+  <p class="small">Photos are private until reviewed. Only approved photos qualify for rewards.</p>
+ </div>
+
+ <div class="card">
+  <h2>My photo uploads</h2>
+  <div id="photos">No photos uploaded yet.</div>
+ </div>
+
+ <div class="card">
+  <h2>Lightning withdrawals</h2>
+  <p>Lightning withdrawals will be activated after the Bitcoin payment system and reward verification are connected.</p>
+  <p class="small">Your displayed reward balance is not yet a withdrawable Bitcoin balance.</p>
+ </div>
+
+ <button class="secondary" onclick="signOut()">Log out</button>
+</section>
+</main>
+
+<script>
+// ADD YOUR OWN SUPABASE PROJECT DETAILS HERE
+const SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL";
+const SUPABASE_KEY = "YOUR_SUPABASE_PUBLISHABLE_KEY";
+
+const client = window.supabase.createClient(
+ SUPABASE_URL,
+ SUPABASE_KEY
+);
+
+let currentUser = null;
+
+function message(text){
+ document.getElementById("message").textContent=text;
+}
+
+async function signUp(){
+ const email=document.getElementById("email").value.trim();
+ const password=document.getElementById("password").value;
+ if(!email || password.length<6){
+  message("Enter a valid email and password of at least 6 characters.");
+  return;
+ }
+ const {error}=await client.auth.signUp({email,password});
+ if(error) message(error.message);
+ else message("Registration submitted. Check your email if confirmation is required.");
+}
+
+async function signIn(){
+ const email=document.getElementById("email").value.trim();
+ const password=document.getElementById("password").value;
+ const {data,error}=await client.auth.signInWithPassword({email,password});
+ if(error){message(error.message);return;}
+ currentUser=data.user;
+ showApp();
+}
+
+async function signOut(){
+ await client.auth.signOut();
+ currentUser=null;
+ document.getElementById("app").style.display="none";
+ document.getElementById("auth").style.display="block";
+ message("You have logged out.");
+}
+
+function showApp(){
+ document.getElementById("auth").style.display="none";
+ document.getElementById("app").style.display="block";
+ message("Welcome to BITPIX!");
+ loadData();
+}
+
+async function uploadPhoto(){
+ if(!currentUser){message("Please log in first.");return;}
+ const file=document.getElementById("photoFile").files[0];
+ if(!file){message("Choose a photo first.");return;}
+ if(!file.type.startsWith("image/")){message("Please select an image.");return;}
+ if(file.size>10*1024*1024){message("Maximum photo size is 10 MB.");return;}
+
+ message("Uploading photo...");
+ const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
+ const path=currentUser.id+"/"+Date.now()+"-"+safeName;
+
+ const {error:uploadError}=await client.storage
+  .from("photos").upload(path,file,{contentType:file.type});
+
+ if(uploadError){message("Upload failed: "+uploadError.message);return;}
+
+ const {error:recordError}=await client.from("photos").insert({
+  user_id:currentUser.id,
+  storage_path:path,
+  status:"pending"
+ });
+
+ if(recordError){
+  message("Photo stored, but its record failed: "+recordError.message);
+  return;
+ }
+
+ document.getElementById("photoFile").value="";
+ message("Photo uploaded! It is waiting for review.");
+ await loadData();
+}
+
+async function loadData(){
+ if(!currentUser)return;
+
+ const {data:rewards,error:rewardError}=await client
+  .from("rewards")
+  .select("amount_btc,status")
+  .eq("user_id",currentUser.id);
+
+ if(rewardError){
+  message("Could not load rewards: "+rewardError.message);
+ }else{
+  const total=(rewards||[])
+   .filter(r=>r.status==="approved")
+   .reduce((sum,r)=>sum+Number(r.amount_btc||0),0);
+  document.getElementById("balance").textContent=
+   total.toFixed(12)+" BTC";
+ }
+
+ const {data:photos,error:photoError}=await client
+  .from("photos")
+  .select("id,storage_path,status,created_at")
+  .eq("user_id",currentUser.id)
+  .order("created_at",{ascending:false});
+
+ if(photoError){
+  document.getElementById("photos").textContent=photoError.message;
+  return;
+ }
+
+ const container=document.getElementById("photos");
+ container.innerHTML="";
+
+ if(!photos || photos.length===0){
+  container.textContent="No photos uploaded yet.";
+  return;
+ }
+
+ for(const photo of photos){
+  const item=document.createElement("div");
+  item.className="card";
+  const status=document.createElement("p");
+  status.textContent="Status: "+photo.status;
+  item.appendChild(status);
+
+  const {data}=await client.storage.from("photos")
+   .createSignedUrl(photo.storage_path,3600);
+
+  if(data && data.signedUrl){
+   const img=document.createElement("img");
+   img.src=data.signedUrl;
+   img.className="photo";
+   img.alt="Your uploaded photo";
+   item.appendChild(img);
+  }
+  container.appendChild(item);
+ }
+}
+
+client.auth.getSession().then(({data})=>{
+ if(data.session){
+  currentUser=data.session.user;
+  showApp();
+ }
+});
+
+client.auth.onAuthStateChange((_event,session)=>{
+ if(session){
+  currentUser=session.user;
+  showApp();
+ }
+});
+</script>
+</body>
+  </html>
+    
