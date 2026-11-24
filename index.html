@@ -4,34 +4,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#111111">
-<title>BITPIX - Photo to Bitcoin</title>
+<meta name="theme-color" content="#101010">
+<title>BITPIX - Bitcoin Community</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box}
 body{margin:0;background:#101010;color:#fff;font-family:Arial,sans-serif}
-header{padding:22px;background:#181818;border-bottom:1px solid #333}
+header{padding:20px;background:#181818;border-bottom:1px solid #333;position:sticky;top:0;z-index:5}
 .logo{font-size:29px;font-weight:900;color:#f7931a}
-.tag{color:#aaa;font-size:12px;margin-top:5px}
-main{max-width:650px;margin:auto;padding:18px}
-.card{background:#1c1c1c;border:1px solid #333;border-radius:15px;padding:18px;margin-bottom:16px}
-h2{font-size:19px;margin-top:0}
-input,button{width:100%;padding:14px;border-radius:9px;margin:7px 0;font-size:15px}
-input{background:#292929;color:white;border:1px solid #555}
+.tag{font-size:11px;color:#aaa;margin-top:5px}
+main{max-width:700px;margin:auto;padding:14px}
+.card{background:#1c1c1c;border:1px solid #333;border-radius:14px;padding:16px;margin-bottom:14px}
+h2{font-size:19px;margin:0 0 12px}
+h3{font-size:16px}
+input,textarea,button{width:100%;padding:13px;border-radius:9px;margin:6px 0;font-size:15px}
+input,textarea{background:#292929;color:white;border:1px solid #555}
+textarea{min-height:85px;resize:vertical}
 button{background:#f7931a;color:#111;font-weight:bold;border:0;cursor:pointer}
 button.secondary{background:#333;color:white}
 button:disabled{opacity:.5}
 .small{font-size:12px;color:#aaa}
-.stat{font-size:27px;color:#f7931a;font-weight:bold}
-.photo{width:100%;border-radius:10px;margin-top:10px}
+.stat{font-size:25px;color:#f7931a;font-weight:bold}
+.media{width:100%;max-height:520px;object-fit:contain;background:#080808;border-radius:10px;margin-top:10px}
 #app{display:none}
-#message{padding:10px;color:#f7931a}
+#message{padding:10px;color:#f7931a;overflow-wrap:anywhere}
+.tabs{display:flex;gap:7px;margin:12px 0}
+.tabs button{flex:1;padding:11px 5px;font-size:13px}
+.post-actions{display:flex;gap:7px}
+.post-actions button{flex:1;font-size:13px;padding:10px 4px}
+.comment{background:#292929;padding:9px;border-radius:8px;margin:6px 0;font-size:13px}
+.post-title{font-size:18px;font-weight:bold;margin-top:10px}
+.post-description{color:#ddd;white-space:pre-wrap;overflow-wrap:anywhere}
+.post-meta{font-size:11px;color:#aaa;margin-top:8px}
+.section-title{color:#f7931a}
+.hidden{display:none}
 </style>
 </head>
 <body>
 <header>
  <div class="logo">₿ BITPIX</div>
- <div class="tag">UPLOAD PHOTOS • EARN BITCOIN • BUILD COMMUNITY</div>
+ <div class="tag">UPLOAD • DISCOVER • SHARE • EARN BITCOIN</div>
 </header>
 <main>
 <div id="message">Welcome to BITPIX. Connect your account to begin.</div>
@@ -48,26 +60,44 @@ button:disabled{opacity:.5}
  <div class="card">
   <h2>My Bitcoin rewards</h2>
   <div class="stat" id="balance">0.000000000000 BTC</div>
-  <p class="small">Approved rewards only. Pending photos do not earn Bitcoin.</p>
+  <p class="small">Approved rewards only. Displayed rewards are not yet withdrawable Bitcoin.</p>
   <button class="secondary" onclick="loadData()">Refresh balance</button>
  </div>
 
  <div class="card">
-  <h2>Upload a photo</h2>
-  <input id="photoFile" type="file" accept="image/*">
-  <button onclick="uploadPhoto()">Upload photo</button>
-  <p class="small">Photos are private until reviewed. Only approved photos qualify for rewards.</p>
+  <h2>Share with BITPIX</h2>
+  <input id="mediaFile" type="file" accept="image/*,video/*">
+  <input id="mediaTitle" type="text" maxlength="120" placeholder="Give your photo or video a title">
+  <textarea id="mediaDescription" maxlength="2000" placeholder="Write a description..."></textarea>
+  <button onclick="uploadMedia()">Upload photo or video</button>
+  <p class="small">Photos up to 10 MB and videos up to 50 MB. Uploads remain private while pending review.</p>
+ </div>
+
+ <div class="tabs">
+  <button onclick="showFeed()">🏠 Feed</button>
+  <button onclick="showTrending()">🔥 Trending</button>
+  <button onclick="showMyUploads()">📷 My uploads</button>
  </div>
 
  <div class="card">
-  <h2>My photo uploads</h2>
-  <div id="photos">No photos uploaded yet.</div>
+  <h2>🔎 Search BITPIX</h2>
+  <input id="searchInput" type="search" placeholder="Search titles and descriptions..." oninput="renderFeed()">
  </div>
+
+ <section id="feedSection">
+  <h2 class="section-title" id="feedHeading">Community feed</h2>
+  <div id="feed">Loading community posts...</div>
+ </section>
+
+ <section id="myUploadsSection" class="hidden">
+  <h2 class="section-title">My photo and video uploads</h2>
+  <div id="myUploads">Loading your uploads...</div>
+ </section>
 
  <div class="card">
   <h2>Lightning withdrawals</h2>
-  <p>Lightning withdrawals will be activated after the Bitcoin payment system and reward verification are connected.</p>
-  <p class="small">Your displayed reward balance is not yet a withdrawable Bitcoin balance.</p>
+  <p>Lightning withdrawals are not active yet. The Bitcoin payment system and reward verification must be connected first.</p>
+  <p class="small">Never send Bitcoin or a Lightning payment to anyone claiming to activate your balance.</p>
  </div>
 
  <button class="secondary" onclick="signOut()">Log out</button>
@@ -75,31 +105,35 @@ button:disabled{opacity:.5}
 </main>
 
 <script>
-// ADD YOUR OWN SUPABASE PROJECT DETAILS HERE
 const SUPABASE_URL = "https://qignaniafogifxtssdbc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lKV1ffgNV96rsusMYp7KQg_Q1CzkNzV";
+const client = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 
-const client = window.supabase.createClient(
- SUPABASE_URL,
- SUPABASE_KEY
-);
-
-let currentUser = null;
+let currentUser=null;
+let feedPosts=[];
+let feedLikes=[];
+let feedComments=[];
+let currentView="feed";
 
 function message(text){
  document.getElementById("message").textContent=text;
 }
 
+function escapeHTML(value){
+ return String(value??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+ }[c]));
+}
+
 async function signUp(){
  const email=document.getElementById("email").value.trim();
  const password=document.getElementById("password").value;
- if(!email || password.length<6){
+ if(!email||password.length<6){
   message("Enter a valid email and password of at least 6 characters.");
   return;
  }
  const {error}=await client.auth.signUp({email,password});
- if(error) message(error.message);
- else message("Registration submitted. Check your email if confirmation is required.");
+ message(error?error.message:"Registration submitted. Check your email if confirmation is required.");
 }
 
 async function signIn(){
@@ -122,39 +156,60 @@ async function signOut(){
 function showApp(){
  document.getElementById("auth").style.display="none";
  document.getElementById("app").style.display="block";
- message("Welcome to BITPIX!");
  loadData();
+ loadFeed();
 }
 
-async function uploadPhoto(){
+async function uploadMedia(){
  if(!currentUser){message("Please log in first.");return;}
- const file=document.getElementById("photoFile").files[0];
- if(!file){message("Choose a photo first.");return;}
- if(!file.type.startsWith("image/")){message("Please select an image.");return;}
- if(file.size>10*1024*1024){message("Maximum photo size is 10 MB.");return;}
 
- message("Uploading photo...");
+ const file=document.getElementById("mediaFile").files[0];
+ const title=document.getElementById("mediaTitle").value.trim();
+ const description=document.getElementById("mediaDescription").value.trim();
+
+ if(!file){message("Choose a photo or video first.");return;}
+ if(!title){message("Please add a title.");return;}
+ if(!file.type.startsWith("image/")&&!file.type.startsWith("video/")){
+  message("Choose an image or video file.");return;
+ }
+
+ const isVideo=file.type.startsWith("video/");
+ const limit=isVideo?50*1024*1024:10*1024*1024;
+ if(file.size>limit){
+  message(isVideo?"Maximum video size is 50 MB.":"Maximum photo size is 10 MB.");
+  return;
+ }
+
+ message("Uploading your media...");
  const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,"_");
  const path=currentUser.id+"/"+Date.now()+"-"+safeName;
 
- const {error:uploadError}=await client.storage
-  .from("photos").upload(path,file,{contentType:file.type});
+ const {error:uploadError}=await client.storage.from("photos").upload(
+  path,file,{contentType:file.type}
+ );
 
- if(uploadError){message("Upload failed: "+uploadError.message);return;}
+ if(uploadError){
+  message("Upload failed: "+uploadError.message);return;
+ }
 
  const {error:recordError}=await client.from("photos").insert({
   user_id:currentUser.id,
   storage_path:path,
-  status:"pending"
+  status:"pending",
+  title:title,
+  description:description,
+  media_type:isVideo?"video":"photo"
  });
 
  if(recordError){
-  message("Photo stored, but its record failed: "+recordError.message);
+  message("File stored, but its record failed: "+recordError.message);
   return;
  }
 
- document.getElementById("photoFile").value="";
- message("Photo uploaded! It is waiting for review.");
+ document.getElementById("mediaFile").value="";
+ document.getElementById("mediaTitle").value="";
+ document.getElementById("mediaDescription").value="";
+ message("Upload successful! Your post is waiting for review.");
  await loadData();
 }
 
@@ -162,8 +217,7 @@ async function loadData(){
  if(!currentUser)return;
 
  const {data:rewards,error:rewardError}=await client
-  .from("rewards")
-  .select("amount_btc,status")
+  .from("rewards").select("amount_btc,status")
   .eq("user_id",currentUser.id);
 
  if(rewardError){
@@ -172,47 +226,237 @@ async function loadData(){
   const total=(rewards||[])
    .filter(r=>r.status==="approved")
    .reduce((sum,r)=>sum+Number(r.amount_btc||0),0);
-  document.getElementById("balance").textContent=
-   total.toFixed(12)+" BTC";
+  document.getElementById("balance").textContent=total.toFixed(12)+" BTC";
  }
 
- const {data:photos,error:photoError}=await client
-  .from("photos")
-  .select("id,storage_path,status,created_at")
+ const {data:photos,error}=await client.from("photos")
+  .select("id,title,description,media_type,storage_path,status,created_at")
   .eq("user_id",currentUser.id)
   .order("created_at",{ascending:false});
 
- if(photoError){
-  document.getElementById("photos").textContent=photoError.message;
-  return;
- }
-
- const container=document.getElementById("photos");
+ const container=document.getElementById("myUploads");
+ if(error){container.textContent=error.message;return;}
  container.innerHTML="";
 
- if(!photos || photos.length===0){
-  container.textContent="No photos uploaded yet.";
+ if(!photos||!photos.length){
+  container.textContent="No uploads yet.";return;
+ }
+
+ for(const p of photos){
+  const item=document.createElement("div");
+  item.className="card";
+  const title=document.createElement("h3");
+  title.textContent=p.title||"Untitled upload";
+  const status=document.createElement("p");
+  status.className="small";
+  status.textContent="Status: "+p.status;
+  item.append(title,status);
+
+  const {data}=await client.storage.from("photos")
+   .createSignedUrl(p.storage_path,3600);
+
+  if(data?.signedUrl){
+   const media=document.createElement(p.media_type==="video"?"video":"img");
+   media.src=data.signedUrl;
+   media.className="media";
+   if(p.media_type==="video")media.controls=true;
+   else media.alt=p.title||"Uploaded photo";
+   item.appendChild(media);
+  }
+  const desc=document.createElement("p");
+  desc.textContent=p.description||"";
+  item.appendChild(desc);
+  container.appendChild(item);
+ }
+}
+
+async function loadFeed(){
+ if(!currentUser)return;
+ const {data:posts,error}=await client.from("photos")
+  .select("id,user_id,title,description,media_type,storage_path,created_at")
+  .eq("status","approved")
+  .order("created_at",{ascending:false})
+  .limit(50);
+
+ if(error){
+  document.getElementById("feed").textContent="Feed unavailable: "+error.message;
+  return;
+ }
+ feedPosts=posts||[];
+
+ const ids=feedPosts.map(p=>p.id);
+ feedLikes=[];
+ feedComments=[];
+
+ if(ids.length){
+  const likesResult=await client.from("photo_likes")
+   .select("photo_id,user_id").in("photo_id",ids);
+  if(!likesResult.error)feedLikes=likesResult.data||[];
+
+  const commentsResult=await client.from("photo_comments")
+   .select("id,photo_id,user_id,comment,created_at")
+   .in("photo_id",ids).order("created_at",{ascending:true});
+  if(!commentsResult.error)feedComments=commentsResult.data||[];
+ }
+
+ renderFeed();
+}
+
+function showFeed(){
+ currentView="feed";
+ document.getElementById("feedSection").classList.remove("hidden");
+ document.getElementById("myUploadsSection").classList.add("hidden");
+ document.getElementById("feedHeading").textContent="Community feed";
+ renderFeed();
+}
+
+function showTrending(){
+ currentView="trending";
+ document.getElementById("feedSection").classList.remove("hidden");
+ document.getElementById("myUploadsSection").classList.add("hidden");
+ document.getElementById("feedHeading").textContent="🔥 Trending posts";
+ renderFeed();
+}
+
+function showMyUploads(){
+ document.getElementById("feedSection").classList.add("hidden");
+ document.getElementById("myUploadsSection").classList.remove("hidden");
+ loadData();
+}
+
+function renderFeed(){
+ const container=document.getElementById("feed");
+ const term=(document.getElementById("searchInput").value||"").trim().toLowerCase();
+
+ let posts=feedPosts.filter(p=>
+  (p.title||"").toLowerCase().includes(term)||
+  (p.description||"").toLowerCase().includes(term)
+ );
+
+ if(currentView==="trending"){
+  posts.sort((a,b)=>
+   feedLikes.filter(x=>x.photo_id===b.id).length-
+   feedLikes.filter(x=>x.photo_id===a.id).length
+  );
+ }
+
+ container.innerHTML="";
+ if(!posts.length){
+  container.textContent=term?"No matching posts found.":"No approved community posts yet.";
   return;
  }
 
- for(const photo of photos){
-  const item=document.createElement("div");
+ posts.forEach(p=>{
+  const likes=feedLikes.filter(x=>x.photo_id===p.id);
+  const liked=likes.some(x=>x.user_id===currentUser.id);
+  const comments=feedComments.filter(x=>x.photo_id===p.id);
+  const item=document.createElement("article");
   item.className="card";
-  const status=document.createElement("p");
-  status.textContent="Status: "+photo.status;
-  item.appendChild(status);
 
-  const {data}=await client.storage.from("photos")
-   .createSignedUrl(photo.storage_path,3600);
+  const title=document.createElement("div");
+  title.className="post-title";
+  title.textContent=p.title||"Untitled post";
+  item.appendChild(title);
 
-  if(data && data.signedUrl){
-   const img=document.createElement("img");
-   img.src=data.signedUrl;
-   img.className="photo";
-   img.alt="Your uploaded photo";
-   item.appendChild(img);
-  }
+  const desc=document.createElement("p");
+  desc.className="post-description";
+  desc.textContent=p.description||"";
+  item.appendChild(desc);
+
+  client.storage.from("photos").createSignedUrl(p.storage_path,3600)
+   .then(({data})=>{
+    if(!data?.signedUrl)return;
+    const media=document.createElement(p.media_type==="video"?"video":"img");
+    media.className="media";
+    media.src=data.signedUrl;
+    if(p.media_type==="video")media.controls=true;
+    else media.alt=p.title||"BITPIX community photo";
+    item.insertBefore(media,desc);
+   });
+
+  const meta=document.createElement("div");
+  meta.className="post-meta";
+  meta.textContent=(p.media_type==="video"?"VIDEO":"PHOTO")+" • "+new Date(p.created_at).toLocaleString();
+  item.appendChild(meta);
+
+  const actions=document.createElement("div");
+  actions.className="post-actions";
+  const likeBtn=document.createElement("button");
+  likeBtn.className="secondary";
+  likeBtn.textContent=(liked?"❤️":"🤍")+" "+likes.length;
+  likeBtn.onclick=()=>toggleLike(p.id,liked);
+  const commentBtn=document.createElement("button");
+  commentBtn.className="secondary";
+  commentBtn.textContent="💬 "+comments.length;
+  commentBtn.onclick=()=>document.getElementById("comment-"+p.id).focus();
+  const shareBtn=document.createElement("button");
+  shareBtn.className="secondary";
+  shareBtn.textContent="🔗 Share";
+  shareBtn.onclick=()=>sharePost(p);
+  actions.append(likeBtn,commentBtn,shareBtn);
+  item.appendChild(actions);
+
+  const commentList=document.createElement("div");
+  comments.slice(-5).forEach(c=>{
+   const line=document.createElement("div");
+   line.className="comment";
+   line.textContent=c.comment;
+   commentList.appendChild(line);
+  });
+  item.appendChild(commentList);
+
+  const commentInput=document.createElement("input");
+  commentInput.id="comment-"+p.id;
+  commentInput.placeholder="Write a comment...";
+  const send=document.createElement("button");
+  send.className="secondary";
+  send.textContent="Post comment";
+  send.onclick=()=>addComment(p.id,commentInput.value);
+  item.append(commentInput,send);
   container.appendChild(item);
+ });
+}
+
+async function toggleLike(photoId,alreadyLiked){
+ if(alreadyLiked){
+  const {error}=await client.from("photo_likes")
+   .delete().eq("photo_id",photoId).eq("user_id",currentUser.id);
+  if(error){message("Could not remove like: "+error.message);return;}
+ }else{
+  const {error}=await client.from("photo_likes").insert({
+   photo_id:photoId,user_id:currentUser.id
+  });
+  if(error){message("Could not like post: "+error.message);return;}
+ }
+ await loadFeed();
+}
+
+async function addComment(photoId,value){
+ const comment=value.trim();
+ if(!comment){message("Write a comment first.");return;}
+ if(comment.length>2000){message("Comment is too long.");return;}
+
+ const {error}=await client.from("photo_comments").insert({
+  photo_id:photoId,user_id:currentUser.id,comment:comment
+ });
+ if(error){message("Could not post comment: "+error.message);return;}
+ message("Comment posted.");
+ await loadFeed();
+}
+
+async function sharePost(post){
+ const url=location.href.split("?")[0]+"?post="+post.id;
+ const shareData={title:post.title||"BITPIX",text:post.description||"See this post on BITPIX",url};
+ try{
+  if(navigator.share)await navigator.share(shareData);
+  else if(navigator.clipboard){
+   await navigator.clipboard.writeText(url);
+   message("Post link copied. You can share it.");
+  }else{
+   message("Sharing is not available on this browser.");
+  }
+ }catch(e){
+  if(e.name!=="AbortError")message("Could not share this post.");
  }
 }
 
@@ -223,13 +467,18 @@ client.auth.getSession().then(({data})=>{
  }
 });
 
-client.auth.onAuthStateChange((_event,session)=>{
- if(session){
+client.auth.onAuthStateChange((event,session)=>{
+ if(event==="SIGNED_IN"&&session){
   currentUser=session.user;
   showApp();
+ }
+ if(event==="SIGNED_OUT"){
+  currentUser=null;
+  document.getElementById("app").style.display="none";
+  document.getElementById("auth").style.display="block";
  }
 });
 </script>
 </body>
-  </html>
-    
+ </html>
+ 
